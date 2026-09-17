@@ -21,7 +21,7 @@
 #ifndef UNIWILL_KEYBOARD_H
 #define UNIWILL_KEYBOARD_H
 
-#include "tuxedo_keyboard_common.h"
+#include "clevo_keyboard_common.h"
 #include <linux/acpi.h>
 #include <linux/wmi.h>
 #include <linux/workqueue.h>

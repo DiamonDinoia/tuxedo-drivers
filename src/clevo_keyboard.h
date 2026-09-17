@@ -25,7 +25,7 @@
 #include <acpi/battery.h>
 #include <linux/version.h>
 
-#include "tuxedo_keyboard_common.h"
+#include "clevo_keyboard_common.h"
 #include "clevo_interfaces.h"
 #include "clevo_leds.h"
 
@@ -63,6 +63,7 @@ static struct clevo_interface_t *active_clevo_interface;
 static struct tuxedo_keyboard_driver clevo_keyboard_driver;
 
 static DEFINE_MUTEX(clevo_keyboard_interface_modification_lock);
+static DEFINE_MUTEX(clevo_flexicharger_lock);
 
 static struct key_entry clevo_keymap[] = {
 	// Keyboard backlight (RGB versions)
@@ -561,6 +562,8 @@ static int clevo_has_legacy_flexicharger(bool *status)
 
 	write_data |= ((read_data >> 8) & 0xffff);
 	result = clevo_evaluate_method(0x76, write_data, &read_data);
+	if (result != 0)
+		return result;
 
 	if (read_data == 0x76)
 		*status = true;
@@ -588,6 +591,9 @@ static int clevo_legacy_flexicharger_read(u8 *start, u8 *end, u8 *status)
 	int result;
 
 	result = clevo_evaluate_method(0x77, 0, &data);
+	if (result != 0)
+		return result;
+
 	if (end != NULL)
 		*end = (data >> 0x10) & 0xff;
 	if (start != NULL)
@@ -671,12 +677,16 @@ static int clevo_cc4_flexicharger_read(u8 *start, u8 *end, u8 *status)
 
 static int clevo_has_cc4_flexicharger(bool *status)
 {
-	if (clevo_cc4_flexicharger_read(NULL, NULL, NULL))
-		*status = false;
-	else
-		*status = true;
+	int result;
 
-	return 0;
+	result = clevo_cc4_flexicharger_read(NULL, NULL, NULL);
+	if (result == 0) {
+		*status = true;
+		return 0;
+	}
+
+	*status = false;
+	return result == -ENODEV ? 0 : result;
 }
 
 static int clevo_cc4_flexicharger_write(const u8 *param_start,
@@ -708,26 +718,111 @@ static int clevo_cc4_flexicharger_write(const u8 *param_start,
 	return 0;
 }
 
-static int clevo_flexicharger_read(u8 *start, u8 *end, u8 *status)
+static int clevo_flexicharger_read_unlocked(u8 *start, u8 *end, u8 *status)
 {
 	bool has_cc4_flexicharger;
-	clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
+	int result;
+
+	result = clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
+	if (result)
+		return result;
+
 	if (has_cc4_flexicharger)
 		return clevo_cc4_flexicharger_read(start, end, status);
-	else
-		return clevo_legacy_flexicharger_read(start, end, status);
+
+	return clevo_legacy_flexicharger_read(start, end, status);
+}
+
+static int clevo_flexicharger_read(u8 *start, u8 *end, u8 *status)
+{
+	int result;
+
+	mutex_lock(&clevo_flexicharger_lock);
+	result = clevo_flexicharger_read_unlocked(start, end, status);
+	mutex_unlock(&clevo_flexicharger_lock);
+
+	return result;
+}
+
+static int clevo_flexicharger_write_unlocked(const u8 *param_start,
+					     const u8 *param_end,
+					     const u8 *param_status)
+{
+	bool has_cc4_flexicharger;
+	u8 legacy_start, legacy_end;
+	int result;
+
+	result = clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
+	if (result)
+		return result;
+
+	if (has_cc4_flexicharger)
+		return clevo_cc4_flexicharger_write(param_start, param_end, param_status);
+
+	if (param_start != NULL) {
+		legacy_start = array_find_closest_u8(*param_start,
+						     clevo_legacy_flexicharger_start_values,
+						     ARRAY_SIZE(clevo_legacy_flexicharger_start_values));
+		param_start = &legacy_start;
+	}
+	if (param_end != NULL) {
+		legacy_end = array_find_closest_u8(*param_end,
+						   clevo_legacy_flexicharger_end_values,
+						   ARRAY_SIZE(clevo_legacy_flexicharger_end_values));
+		param_end = &legacy_end;
+	}
+
+	return clevo_legacy_flexicharger_write(param_start, param_end, param_status);
 }
 
 static int clevo_flexicharger_write(const u8 *param_start,
 				    const u8 *param_end,
 				    const u8 *param_status)
 {
+	int result;
+
+	mutex_lock(&clevo_flexicharger_lock);
+	result = clevo_flexicharger_write_unlocked(param_start, param_end,
+						    param_status);
+	mutex_unlock(&clevo_flexicharger_lock);
+
+	return result;
+}
+
+// Command 0x46 restores CC4 charge values from NVRAM. Restore the live values
+// after the command. Keep the snapshot if the active interface cannot restore it.
+static struct {
+	u8 start, end, status;
+	bool held;
+} clevo_flexicharger_preserve;
+
+static void clevo_flexicharger_set_events_enabled(struct clevo_interface_t *interface)
+{
 	bool has_cc4_flexicharger;
-	clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
-	if (has_cc4_flexicharger)
-		return clevo_cc4_flexicharger_write(param_start, param_end, param_status);
-	else
-		return clevo_legacy_flexicharger_write(param_start, param_end, param_status);
+	union acpi_object *out_obj;
+
+	mutex_lock(&clevo_flexicharger_lock);
+
+	if (!clevo_flexicharger_preserve.held &&
+	    !clevo_has_cc4_flexicharger(&has_cc4_flexicharger) &&
+	    has_cc4_flexicharger &&
+	    !clevo_cc4_flexicharger_read(&clevo_flexicharger_preserve.start,
+					 &clevo_flexicharger_preserve.end,
+					 &clevo_flexicharger_preserve.status))
+		clevo_flexicharger_preserve.held = true;
+
+	// method_call only fills out_obj on success (status 0); freeing on a
+	// nonzero return would ACPI_FREE an uninitialized pointer.
+	if (!interface->method_call(CLEVO_CMD_SET_EVENTS_ENABLED, 0, &out_obj))
+		ACPI_FREE(out_obj);
+
+	if (clevo_flexicharger_preserve.held &&
+	    !clevo_cc4_flexicharger_write(&clevo_flexicharger_preserve.start,
+					  &clevo_flexicharger_preserve.end,
+					  &clevo_flexicharger_preserve.status))
+		clevo_flexicharger_preserve.held = false;
+
+	mutex_unlock(&clevo_flexicharger_lock);
 }
 
 static ssize_t charge_type_show(struct device *device,
@@ -768,8 +863,10 @@ static ssize_t charge_type_store(struct device *dev,
 
 	if (result < 0)
 		return result;
-	else
-		return count;
+
+	power_supply_changed(to_power_supply(dev));
+
+	return count;
 }
 
 static ssize_t charge_control_start_threshold_show(struct device *device,
@@ -792,7 +889,7 @@ static ssize_t charge_control_start_threshold_store(struct device *dev,
 						    const char *buf,
 						    size_t count)
 {
-	u8 value, write_value;
+	u8 value;
 	int result;
 
 	result = kstrtou8(buf, 10, &value);
@@ -801,16 +898,15 @@ static ssize_t charge_control_start_threshold_store(struct device *dev,
 
 	if (value < 1 || value > 100)
 		return -EINVAL;
-	
-	write_value = array_find_closest_u8(value,
-					    clevo_legacy_flexicharger_start_values,
-					    ARRAY_SIZE(clevo_legacy_flexicharger_start_values));
-	result = clevo_flexicharger_write(&write_value, NULL, NULL);
+
+	result = clevo_flexicharger_write(&value, NULL, NULL);
 
 	if (result < 0)
 		return result;
-	else
-		return count;
+
+	power_supply_changed(to_power_supply(dev));
+
+	return count;
 }
 
 static ssize_t charge_control_end_threshold_show(struct device *device,
@@ -833,7 +929,7 @@ static ssize_t charge_control_end_threshold_store(struct device *dev,
 						  const char *buf,
 						  size_t count)
 {
-	u8 value, write_value;
+	u8 value;
 	int result;
 
 	result = kstrtou8(buf, 10, &value);
@@ -843,16 +939,14 @@ static ssize_t charge_control_end_threshold_store(struct device *dev,
 	if (value < 1 || value > 100)
 		return -EINVAL;
 
-	write_value = array_find_closest_u8(value,
-					    clevo_legacy_flexicharger_end_values,
-					    ARRAY_SIZE(clevo_legacy_flexicharger_end_values));
-	result = clevo_flexicharger_write(NULL, &write_value, NULL);
-
+	result = clevo_flexicharger_write(NULL, &value, NULL);
 
 	if (result < 0)
 		return result;
-	else
-		return count;
+
+	power_supply_changed(to_power_supply(dev));
+
+	return count;
 }
 
 static ssize_t charge_control_start_available_thresholds_show(struct device *device,
@@ -921,9 +1015,11 @@ static int clevo_battery_add(struct power_supply *battery)
 static int clevo_battery_add(struct power_supply *battery, struct acpi_battery_hook *hook)
 #endif
 {
-	bool has_legacy_flexicharger;
-	bool has_cc4_flexicharger;
+	bool has_legacy_flexicharger = false;
+	bool has_cc4_flexicharger = false;
 
+	// WMI can reject the CC4 probe before ACPI takes priority. Probe both
+	// transports for registration. Later reads and writes still return errors.
 	clevo_has_legacy_flexicharger(&has_legacy_flexicharger);
 	clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
 
@@ -960,7 +1056,7 @@ static int clevo_battery_remove(struct power_supply *battery, struct acpi_batter
 static struct acpi_battery_hook battery_hook = {
 	.add_battery = clevo_battery_add,
 	.remove_battery = clevo_battery_remove,
-	.name = "TUXEDO Flexicharger Extension",
+	.name = "CLEVO Flexicharger Extension",
 };
 
 static void clevo_flexicharger_init(void)
@@ -981,7 +1077,7 @@ static void clevo_keyboard_init(void)
 	kbd_led_state.mode = param_kbd_backlight_mode;
 	set_kbd_backlight_mode(kbd_led_state.mode);
 
-	clevo_evaluate_method(CLEVO_CMD_SET_EVENTS_ENABLED, 0, NULL);
+	clevo_flexicharger_set_events_enabled(active_clevo_interface);
 
 	// Workaround for firmware issue not setting selected performance profile.
 	// Explicitly set "performance" perf. profile on init regardless of what is chosen
@@ -1046,7 +1142,7 @@ static int clevo_keyboard_suspend(struct platform_device *dev, pm_message_t stat
 
 static int clevo_keyboard_resume(struct platform_device *dev)
 {
-	clevo_evaluate_method(CLEVO_CMD_SET_EVENTS_ENABLED, 0, NULL);
+	clevo_flexicharger_set_events_enabled(active_clevo_interface);
 	clevo_leds_restore_state_extern(); // Sometimes clevo devices forget their last state after
 					   // suspend, so let the kernel ensure it.
 	clevo_leds_resume(dev);
@@ -1084,17 +1180,20 @@ int clevo_keyboard_add_interface(struct clevo_interface_t *new_interface)
 		// Only use wmi if there is no other current interface
 		if (ZERO_OR_NULL_PTR(active_clevo_interface)) {
 			pr_debug("enable wmi events\n");
-			clevo_interfaces.wmi->method_call(CLEVO_CMD_SET_EVENTS_ENABLED, 0, NULL);
-
+			// Assign first: preserve snapshot/restore dispatch through the
+			// active interface.
 			active_clevo_interface = clevo_interfaces.wmi;
+			clevo_flexicharger_set_events_enabled(clevo_interfaces.wmi);
 		}
 	} else if (strcmp(new_interface->string_id, CLEVO_INTERFACE_ACPI_STRID) == 0) {
 		clevo_interfaces.acpi = new_interface;
 		clevo_interfaces.acpi->event_callb = clevo_keyboard_event_callb;
 
 		pr_debug("enable acpi events (takes priority)\n");
-		clevo_interfaces.acpi->method_call(CLEVO_CMD_SET_EVENTS_ENABLED, 0, NULL);
+		// Assign first: preserve snapshot/restore dispatch through the
+		// active interface.
 		active_clevo_interface = clevo_interfaces.acpi;
+		clevo_flexicharger_set_events_enabled(clevo_interfaces.acpi);
 	} else {
 		// Not recognized interface
 		pr_err("unrecognized interface\n");
@@ -1137,3 +1236,4 @@ int clevo_keyboard_remove_interface(struct clevo_interface_t *interface)
 EXPORT_SYMBOL(clevo_keyboard_remove_interface);
 
 #endif // CLEVO_KEYBOARD_H
+
