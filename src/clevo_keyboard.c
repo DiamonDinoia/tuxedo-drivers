@@ -18,12 +18,12 @@
  * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#define pr_fmt(fmt) "tuxedo_keyboard" ": " fmt
+#define pr_fmt(fmt) "clevo_keyboard" ": " fmt
 
-#include "tuxedo_keyboard_common.h"
+#include "clevo_keyboard_common.h"
 #include "clevo_keyboard.h"
 #include "uniwill_keyboard.h"
-#include "tuxedo_compatibility_check/tuxedo_compatibility_check.h"
+#include "clevo_compatibility_check/clevo_compatibility_check.h"
 #include <linux/mutex.h>
 #include <asm/cpu_device_id.h>
 #include <asm/intel-family.h>
@@ -66,7 +66,7 @@ static int tuxedo_input_init(const struct key_entry key_map[])
 		return -ENOMEM;
 	}
 
-	tuxedo_input_device->name = "TUXEDO Keyboard";
+	tuxedo_input_device->name = "CLEVO Keyboard";
 	tuxedo_input_device->phys = DRIVER_NAME "/input0";
 	tuxedo_input_device->id.bustype = BUS_HOST;
 	tuxedo_input_device->dev.parent = &tuxedo_platform_device->dev;
@@ -199,8 +199,8 @@ static int __init tuxedo_keyboard_init(void)
 {
 	TUXEDO_INFO("module init\n");
 
-	if (!tuxedo_is_compatible())
-		return -ENODEV;
+//	if (!tuxedo_is_compatible())
+//		return -ENODEV;
 
 	return 0;
 }

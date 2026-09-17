@@ -36,7 +36,7 @@
 #define TUXEDO_DEBUG(fmt, ...) __TUXEDO_PR(debug, "[%s:%u] " fmt, __func__, __LINE__, ##__VA_ARGS__)
 
 #ifndef DRIVER_NAME
-#define DRIVER_NAME "tuxedo_keyboard"
+#define DRIVER_NAME "clevo_keyboard"
 #endif
 
 struct tuxedo_keyboard_driver {

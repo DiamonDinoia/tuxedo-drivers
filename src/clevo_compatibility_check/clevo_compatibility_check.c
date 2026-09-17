@@ -18,7 +18,7 @@
  * with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "tuxedo_compatibility_check.h"
+#include "clevo_compatibility_check.h"
 
 #include <linux/module.h>
 #include <linux/dmi.h>
@@ -203,17 +203,17 @@ static const struct x86_cpu_id force_tuxedo_dmi_string_check_match[] = {
 static const struct dmi_system_id tuxedo_dmi_string_match[] = {
 	{
 		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "TUXEDO"),
+			DMI_MATCH(DMI_SYS_VENDOR, "Notebook"),
 		},
 	},
 	{
 		.matches = {
-			DMI_MATCH(DMI_BOARD_VENDOR, "TUXEDO"),
+			DMI_MATCH(DMI_BOARD_VENDOR, "Notebook"),
 		},
 	},
 	{
 		.matches = {
-			DMI_MATCH(DMI_CHASSIS_VENDOR, "TUXEDO"),
+			DMI_MATCH(DMI_CHASSIS_VENDOR, "Notebook"),
 		},
 	},
 	{ }

@@ -66,7 +66,7 @@ static int clevo_wmi_interface_method_call_pkgbuf(u8 cmd, u8 *arg, u32 length, u
 {
 	pr_info("%s: unsupported wmi method call; ignoring cmd 0x%02x; please use acpi interface\n",
 			__func__, cmd);
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 struct clevo_interface_t clevo_wmi_interface = {

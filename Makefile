@@ -18,6 +18,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
+obj-m := src/clevo_keyboard.o \
+	 src/clevo_wmi.o \
+	 src/clevo_acpi.o
+
 .PHONY: all install clean package package-deb package-rpm package-alpm
 
 KDIR := /lib/modules/$(shell uname -r)/build
