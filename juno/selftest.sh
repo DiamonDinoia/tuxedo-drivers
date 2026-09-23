@@ -2,9 +2,10 @@
 # juno/selftest.sh -- host-only checks, no EC access, no root. Usage: make test
 #   flexicharger  src/clevo_keyboard.h flexicharger code against a fake EC
 #                 (juno/flexicharger-test.c), built with ASan/UBSan
-#   build         make -j2 of the module trio against KDIR (default: running
-#                 kernel) exits 0 with no warning line; kbuild's "compiler
-#                 differs" note is host state, filtered and printed
+#   build         make -C build -j2, run from outside the tree, of the module
+#                 trio against KDIR (default: running kernel) exits 0 with no
+#                 warning line; kbuild's "compiler differs" note is host
+#                 state, filtered and printed
 set -uo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d)
@@ -28,7 +29,7 @@ fi
 mkdir "$T/build"
 cp -r "$REPO/Makefile" "$REPO/src" "$T/build/"
 find "$T/build/src" \( -name '*.ko' -o -name '*.o' -o -name '*.mod*' -o -name '.*.cmd' \) -delete
-(cd "$T/build" && env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL make -j2) >"$T/build.log" 2>&1
+(cd "$T" && env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL make -C build -j2) >"$T/build.log" 2>&1
 st=$?
 for m in clevo_keyboard clevo_wmi clevo_acpi; do
 	[ -f "$T/build/src/$m.ko" ] || st="$st, missing $m.ko"
