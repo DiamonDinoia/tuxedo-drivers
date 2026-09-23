@@ -1232,4 +1232,3 @@ int clevo_keyboard_remove_interface(struct clevo_interface_t *interface)
 EXPORT_SYMBOL(clevo_keyboard_remove_interface);
 
 #endif // CLEVO_KEYBOARD_H
-
