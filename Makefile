@@ -27,14 +27,14 @@ obj-m := src/clevo_keyboard.o \
 KDIR := /lib/modules/$(shell uname -r)/build
 
 all:
-	make -C $(KDIR) M=$(PWD) $(MAKEFLAGS) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 install: all
-	make -C $(KDIR) M=$(PWD) $(MAKEFLAGS) modules_install
+	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
 	cp -r usr /
 
 clean:
-	make -C $(KDIR) M=$(PWD) $(MAKEFLAGS) clean
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
 	rm -rf build/
 
 package: package-deb package-rpm package-alpm
