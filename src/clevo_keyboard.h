@@ -761,15 +761,15 @@ static int clevo_flexicharger_write_unlocked(const u8 *param_start,
 		return clevo_cc4_flexicharger_write(param_start, param_end, param_status);
 
 	if (param_start != NULL) {
-		legacy_start = array_find_closest_u8(*param_start,
-						     clevo_legacy_flexicharger_start_values,
-						     ARRAY_SIZE(clevo_legacy_flexicharger_start_values));
+		legacy_start = array_find_closest_u8(
+			*param_start, clevo_legacy_flexicharger_start_values,
+			ARRAY_SIZE(clevo_legacy_flexicharger_start_values));
 		param_start = &legacy_start;
 	}
 	if (param_end != NULL) {
-		legacy_end = array_find_closest_u8(*param_end,
-						   clevo_legacy_flexicharger_end_values,
-						   ARRAY_SIZE(clevo_legacy_flexicharger_end_values));
+		legacy_end = array_find_closest_u8(
+			*param_end, clevo_legacy_flexicharger_end_values,
+			ARRAY_SIZE(clevo_legacy_flexicharger_end_values));
 		param_end = &legacy_end;
 	}
 
