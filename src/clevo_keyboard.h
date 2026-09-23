@@ -1016,8 +1016,10 @@ static int clevo_battery_add(struct power_supply *battery, struct acpi_battery_h
 	bool has_cc4_flexicharger = false;
 
 	// A failed probe leaves its flag false
+	mutex_lock(&clevo_flexicharger_lock);
 	clevo_has_legacy_flexicharger(&has_legacy_flexicharger);
 	clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
+	mutex_unlock(&clevo_flexicharger_lock);
 
 	if (has_cc4_flexicharger) {
 		pr_debug("cc4 flexicharger identified\n");
