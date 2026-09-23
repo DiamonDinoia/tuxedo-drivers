@@ -797,7 +797,7 @@ static struct {
 	bool held;
 } clevo_flexicharger_preserve;
 
-static void clevo_flexicharger_set_events_enabled(struct clevo_interface_t *interface)
+static void clevo_flexicharger_set_events_enabled(void)
 {
 	union acpi_object *out_obj;
 
@@ -810,9 +810,7 @@ static void clevo_flexicharger_set_events_enabled(struct clevo_interface_t *inte
 					      &clevo_flexicharger_preserve.status))
 		clevo_flexicharger_preserve.held = true;
 
-	// method_call only fills out_obj on success (status 0); freeing on a
-	// nonzero return would ACPI_FREE an uninitialized pointer.
-	if (!interface->method_call(CLEVO_CMD_SET_EVENTS_ENABLED, 0, &out_obj))
+	if (!clevo_evaluate_method2(CLEVO_CMD_SET_EVENTS_ENABLED, 0, &out_obj))
 		ACPI_FREE(out_obj);
 
 	if (clevo_flexicharger_preserve.held &&
@@ -1075,7 +1073,7 @@ static void clevo_keyboard_init(void)
 	kbd_led_state.mode = param_kbd_backlight_mode;
 	set_kbd_backlight_mode(kbd_led_state.mode);
 
-	clevo_flexicharger_set_events_enabled(active_clevo_interface);
+	clevo_flexicharger_set_events_enabled();
 
 	// Workaround for firmware issue not setting selected performance profile.
 	// Explicitly set "performance" perf. profile on init regardless of what is chosen
@@ -1140,7 +1138,7 @@ static int clevo_keyboard_suspend(struct platform_device *dev, pm_message_t stat
 
 static int clevo_keyboard_resume(struct platform_device *dev)
 {
-	clevo_flexicharger_set_events_enabled(active_clevo_interface);
+	clevo_flexicharger_set_events_enabled();
 	clevo_leds_restore_state_extern(); // Sometimes clevo devices forget their last state after
 					   // suspend, so let the kernel ensure it.
 	clevo_leds_resume(dev);
@@ -1178,20 +1176,18 @@ int clevo_keyboard_add_interface(struct clevo_interface_t *new_interface)
 		// Only use wmi if there is no other current interface
 		if (ZERO_OR_NULL_PTR(active_clevo_interface)) {
 			pr_debug("enable wmi events\n");
-			// Assign first: preserve snapshot/restore dispatch through the
-			// active interface.
+			// Assign first: 0x46 and the preserve dispatch through it
 			active_clevo_interface = clevo_interfaces.wmi;
-			clevo_flexicharger_set_events_enabled(clevo_interfaces.wmi);
+			clevo_flexicharger_set_events_enabled();
 		}
 	} else if (strcmp(new_interface->string_id, CLEVO_INTERFACE_ACPI_STRID) == 0) {
 		clevo_interfaces.acpi = new_interface;
 		clevo_interfaces.acpi->event_callb = clevo_keyboard_event_callb;
 
 		pr_debug("enable acpi events (takes priority)\n");
-		// Assign first: preserve snapshot/restore dispatch through the
-		// active interface.
+		// Assign first: 0x46 and the preserve dispatch through it
 		active_clevo_interface = clevo_interfaces.acpi;
-		clevo_flexicharger_set_events_enabled(clevo_interfaces.acpi);
+		clevo_flexicharger_set_events_enabled();
 	} else {
 		// Not recognized interface
 		pr_err("unrecognized interface\n");
