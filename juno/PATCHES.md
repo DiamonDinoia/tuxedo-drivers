@@ -405,7 +405,8 @@ resume and reboot.
 
 Validation: host leg — witnessed reload/resume runs on attempt-1
 binaries (reviewer-accepted); container leg —
-`juno/EVIDENCE-s2b-container.md` (build, no-new-warnings, vermagic).
+the S2b container harness run (build, no-new-warnings, vermagic); harness and
+run record since removed, see the git history of `juno/`.
 
 
 ## S6: cc4 threshold write passthrough (user requirement)
@@ -416,6 +417,6 @@ also on cc4-capable ECs whose pkgbuf carries raw percents. On cc4 the value
 now passes through unsnapped (1..100 bounds kept); the legacy snap remains for
 0x76 ECs. Verified: 75/85 write→readback exact on the Tongfang V5xTNC_TND_TNE
 (cc4). `charge_control_*_available_thresholds` sysfs lists remain the legacy
-table (cosmetic; upstream-shaped). Container check: juno/container-check.sh
-RESULT PASS, image debian:sid c37028b7f13d, machine laptop, 2026-09-05.
+table (cosmetic; upstream-shaped). Container harness
+RESULT PASS (since removed), image debian:sid c37028b7f13d, machine laptop, 2026-09-05.
 Module version: dkms.conf PACKAGE_VERSION=4.6.2+diamon2.
