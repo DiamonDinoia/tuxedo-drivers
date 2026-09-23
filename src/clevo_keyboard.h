@@ -651,14 +651,15 @@ static int clevo_cc4_flexicharger_read(u8 *start, u8 *end, u8 *status)
 	if (result)
 		return -EIO;
 
-	if (out_obj->type != ACPI_TYPE_BUFFER ||
-	    out_obj->buffer.length < 3) {
+	if (out_obj->type == ACPI_TYPE_BUFFER && out_obj->buffer.length < 3) {
 		ACPI_FREE(out_obj);
 		return -EIO;
 	}
 
-	if (out_obj->buffer.pointer[2] == 0 &&
-	    out_obj->buffer.pointer[1] == 0) {
+	// WMI answers with an integer: no cc4 on this transport
+	if (out_obj->type != ACPI_TYPE_BUFFER ||
+	    (out_obj->buffer.pointer[2] == 0 &&
+	     out_obj->buffer.pointer[1] == 0)) {
 		ACPI_FREE(out_obj);
 		return -ENODEV;
 	}
@@ -798,17 +799,15 @@ static struct {
 
 static void clevo_flexicharger_set_events_enabled(struct clevo_interface_t *interface)
 {
-	bool has_cc4_flexicharger;
 	union acpi_object *out_obj;
 
 	mutex_lock(&clevo_flexicharger_lock);
 
+	// Over WMI the snapshot comes from the legacy read; the restore is cc4 only.
 	if (!clevo_flexicharger_preserve.held &&
-	    !clevo_has_cc4_flexicharger(&has_cc4_flexicharger) &&
-	    has_cc4_flexicharger &&
-	    !clevo_cc4_flexicharger_read(&clevo_flexicharger_preserve.start,
-					 &clevo_flexicharger_preserve.end,
-					 &clevo_flexicharger_preserve.status))
+	    !clevo_flexicharger_read_unlocked(&clevo_flexicharger_preserve.start,
+					      &clevo_flexicharger_preserve.end,
+					      &clevo_flexicharger_preserve.status))
 		clevo_flexicharger_preserve.held = true;
 
 	// method_call only fills out_obj on success (status 0); freeing on a
@@ -1018,8 +1017,7 @@ static int clevo_battery_add(struct power_supply *battery, struct acpi_battery_h
 	bool has_legacy_flexicharger = false;
 	bool has_cc4_flexicharger = false;
 
-	// WMI can reject the CC4 probe before ACPI takes priority. Probe both
-	// transports for registration. Later reads and writes still return errors.
+	// A failed probe leaves its flag false
 	clevo_has_legacy_flexicharger(&has_legacy_flexicharger);
 	clevo_has_cc4_flexicharger(&has_cc4_flexicharger);
 
