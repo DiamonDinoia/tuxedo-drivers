@@ -24,7 +24,7 @@ sudo -A diff -r /usr/src/clevo-keyboard-4.6.2+diamon1 <user-side re-extract of t
 ```
 
 The DKMS source tree is bit-identical to `git archive 8d62d12` — the same
-archive form `container-check.sh` consumed in S2b, so the compiled inputs
+archive form the S2b container harness consumed, so the compiled inputs
 are exactly what S2b validated.
 
 ## 2. dkms add + build (log: /tmp/opencode/s4-dkms-add-build.log)
@@ -109,7 +109,7 @@ modinfo of the running kernel's installed clevo_keyboard (decompressed):
 `srcversion=(absent)`.
 
 **Gap report, not silent skip:** the brief's step 3 presumes
-EVIDENCE-s2b-container.md carries a reference sha256 of the S2b
+the S2b container run record carries a reference sha256 of the S2b
 container-built artifact. It does not — the file records only the
 container image_id; the container workdir was trap-deleted and the
 validated .ko copies in the worktree src/ were cleaned after the S2b

@@ -1,28 +1,22 @@
 # BUILD.md — build / smoke-load / revert runbook (clevo trio)
 
-Host: siduction `laptop`, kernel `7.2.2-1-siduction-amd64`. Everything
-builds in a container; only the load/revert steps touch the host, and
-always through `juno/RELOAD.sh`.
+Host: siduction `laptop`, kernel `7.2.2-1-siduction-amd64`. The build and
+`make test` touch no hardware; only the load/revert steps touch the EC,
+and always through `juno/RELOAD.sh`.
 
-## 1. Build (container, canonical)
+## 1. Build and host checks
 
 ```sh
-bash juno/container-check.sh
+nice -n19 ionice -c3 taskset -c 0,5-21 make -j4
+nice -n19 ionice -c3 taskset -c 0,5-21 make test
 ```
 
-Runs `podman` (falls back to `docker`) with image `debian:sid`, the
-host's running-kernel headers bind-mounted read-only
-(`/lib/modules/$(uname -r)/build` → `/kbuild-ro:ro`), and the compiler
-taken from the kernel's `auto.conf` (`CONFIG_CC_VERSION_TEXT`, gcc-15 on
-this host). It builds the patched tree (HEAD) and the pre-patch base,
-checks no new W=1/sparse warnings, verifies `vermagic`, and copies the
-three validated modules (`clevo_keyboard.ko`, `clevo_wmi.ko`,
-`clevo_acpi.ko` — the Makefile's whole `obj-m` list) into `src/`. Run
-record of the S2b round: `juno/EVIDENCE-s2b-container.md`. If a build
-against the read-only headers fails, the script retries against a
-writable copy made inside the container.
+`make` builds the three modules of the Makefile's `obj-m` list
+(`clevo_keyboard.ko`, `clevo_wmi.ko`, `clevo_acpi.ko`) into `src/` against
+`/lib/modules/$(uname -r)/build`. `make test` runs `juno/selftest.sh`: the
+flexicharger code against a fake EC, and a warning-free rebuild of the trio.
 
-Bare manual equivalent (no validation, no copy-back):
+Container build (no host toolchain needed):
 
 ```sh
 podman run --rm \
