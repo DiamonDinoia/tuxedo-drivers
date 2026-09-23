@@ -776,6 +776,13 @@ static int clevo_flexicharger_write_unlocked(const u8 *param_start,
 	return clevo_legacy_flexicharger_write(param_start, param_end, param_status);
 }
 
+// Command 0x46 restores CC4 charge values from NVRAM. Restore the live values
+// after the command. Keep the snapshot if the active interface cannot restore it.
+static struct {
+	u8 start, end, status;
+	bool held;
+} clevo_flexicharger_preserve;
+
 static int clevo_flexicharger_write(const u8 *param_start,
 				    const u8 *param_end,
 				    const u8 *param_status)
@@ -785,17 +792,13 @@ static int clevo_flexicharger_write(const u8 *param_start,
 	mutex_lock(&clevo_flexicharger_lock);
 	result = clevo_flexicharger_write_unlocked(param_start, param_end,
 						    param_status);
+	// A store supersedes a snapshot that a failed restore left held
+	if (!result)
+		clevo_flexicharger_preserve.held = false;
 	mutex_unlock(&clevo_flexicharger_lock);
 
 	return result;
 }
-
-// Command 0x46 restores CC4 charge values from NVRAM. Restore the live values
-// after the command. Keep the snapshot if the active interface cannot restore it.
-static struct {
-	u8 start, end, status;
-	bool held;
-} clevo_flexicharger_preserve;
 
 static void clevo_flexicharger_set_events_enabled(void)
 {

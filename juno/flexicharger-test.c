@@ -148,11 +148,17 @@ static int ec_call(bool wmi, u8 cmd, u32 arg, union acpi_object **out)
 
 static int acpi_call(u8 cmd, u32 arg, union acpi_object **out) { return ec_call(false, cmd, arg, out); }
 static int wmi_call(u8 cmd, u32 arg, union acpi_object **out) { return ec_call(true, cmd, arg, out); }
+static bool pkgbuf_fail_once;
 static int acpi_pkgbuf(u8 cmd, u8 *arg, u32 len, union acpi_object **out)
 {
-	union acpi_object *o = new_obj(ACPI_TYPE_BUFFER);
+	union acpi_object *o;
 
 	assert(cmd == 0x04 && len >= 4 && arg[0] == 0x1f);
+	if (pkgbuf_fail_once) {
+		pkgbuf_fail_once = false;
+		return -EIO;
+	}
+	o = new_obj(ACPI_TYPE_BUFFER);
 	if (!clevo_flexicharger_lock.locked)
 		++unlocked_ec_calls;
 	memcpy(ec.live, arg + 1, 3);
@@ -273,6 +279,19 @@ int main(void)
 	memset(buf, 0, sizeof(buf));
 	CHECK(charge_control_end_available_thresholds_show(&bat.dev, NULL, buf) > 0 &&
 	      !strcmp(buf, "60 70 80 90 100\n"));
+	END();
+
+	CASE("a store after a failed restore drops the snapshot, so the next 0x46 keeps 75/85");
+	reset(1, 95, 100, 1, 70, 80);
+	add_interface(&wmi_if);
+	pkgbuf_fail_once = true;
+	add_interface(&acpi_if);
+	CHECK(clevo_flexicharger_preserve.held);
+	CHECK(charge_control_start_threshold_store(&bat.dev, NULL, "75", 2) == 2);
+	CHECK(charge_control_end_threshold_store(&bat.dev, NULL, "85", 2) == 2);
+	CHECK(!clevo_flexicharger_preserve.held);
+	clevo_flexicharger_set_events_enabled(); // resume
+	CHECK(live_is(1, 75, 85));
 	END();
 
 	CASE("every EC object handed out was freed exactly once");
