@@ -22,34 +22,15 @@ obj-m := src/clevo_keyboard.o \
 	 src/clevo_wmi.o \
 	 src/clevo_acpi.o
 
-.PHONY: all install clean test package package-deb package-rpm package-alpm
+.PHONY: all clean test
 
 KDIR := /lib/modules/$(shell uname -r)/build
 
 all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
-install: all
-	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
-	cp -r usr /
-
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	rm -rf build/
 
 test:
 	bash juno/selftest.sh
-
-package: package-deb package-rpm package-alpm
-
-package-deb:
-	simple-package-creator --output-dir build-deb --formats DEB
-	simple-package-tools build deb --dir build-deb --no-build-deps
-
-package-rpm:
-	simple-package-creator --output-dir build-rpm --formats RPM
-	simple-package-tools build rpm --dir build-rpm --no-build-deps
-
-package-alpm:
-	simple-package-creator --output-dir build-alpm --formats ALPM
-	simple-package-tools build alpm --dir build-alpm --no-build-deps

@@ -87,9 +87,10 @@ ephemeral live run 2026-09-16 PASS (hook registered, 85/75 round-trip).
 
 ### 7. Kept fork-side, not derived from upstream
 
-`juno/` (harness + docs), `README.md`, `dkms.conf`, `debian/`,
-`tuxedo_keyboard.conf`, `99-z-tuxedo-systemd-fix.rules`,
-`tuxedo-drivers.spec.in`. Not vendored (outside the payload layout):
+`juno/` (harness + docs), `README.md`, `dkms.conf`. The 4.6.2-era
+`debian/`, `tuxedo-drivers.spec.in`, `tuxedo_keyboard.conf` and
+`99-z-tuxedo-systemd-fix.rules` were removed after the rebase; `dkms.conf`
+is the only packaging. Not vendored (outside the payload layout):
 upstream's `files/`, `pkg-tests/`, `package.yml`, `.editorconfig`,
 `.gitlab-ci.yml`.
 
