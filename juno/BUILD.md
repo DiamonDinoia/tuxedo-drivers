@@ -27,19 +27,14 @@ podman run --rm \
     make KDIR=/kbuild-ro'
 ```
 
-## 2. Stage clevofan.ko (prerequisite for --modules-dir)
+## 2. clevofan is not part of --modules-dir
 
-The Makefile builds exactly three modules, but `RELOAD.sh
---modules-dir DIR` requires all four load-order `.ko` in DIR (exit 2
-otherwise): `clevofan` comes from the DKMS-installed juno-drivers
-package, not from this tree. Stage it once per kernel:
-
-```sh
-zstd -d < /lib/modules/$(uname -r)/updates/dkms/clevofan.ko.zst > src/clevofan.ko
-```
-
-(`src/clevofan.ko` inside the tree is worktree-local residue: delete it
-after the witnessed run; never commit it. `*.ko` is gitignored.)
+The Makefile builds exactly three modules, and `RELOAD.sh
+--modules-dir DIR` requires only those three load-order `.ko` in DIR
+(exit 2 otherwise): `clevofan` comes from the DKMS-installed
+juno-drivers package and is never read from DIR. If clevofan is
+currently loaded, RELOAD.sh unloads and reloads it via modprobe on its
+own; no staging step is needed.
 
 ## 3. Smoke-load the patched trio
 
@@ -48,9 +43,10 @@ sudo -A bash juno/RELOAD.sh --modules-dir "$PWD/src" 95 100
 ```
 
 Writes 95/100 to the battery's `charge_control_*_threshold` sysfs,
-removes `clevofan clevo_acpi clevo_wmi clevo_keyboard`, insmods
-`clevo_keyboard clevo_wmi clevo_acpi clevofan` from the given dir (the
-patched trio plus staged clevofan), and prints
+removes `clevo_acpi clevo_wmi clevo_keyboard` (and `clevofan` via
+modprobe, if it was loaded), insmods `clevo_keyboard clevo_wmi
+clevo_acpi` from the given dir (the patched trio; clevofan, if
+reloaded, comes back via modprobe, not from the dir), and prints
 `key=value` witness lines (thresholds before/after, `charge_type`,
 srcversions). Fan daemons are stopped first and restarted by an EXIT
 trap even on failure.
