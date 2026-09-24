@@ -5,15 +5,19 @@
 # Usage: sudo -A bash juno/RELOAD.sh [--modules-dir DIR] [START END]
 #
 #   --modules-dir DIR   insmod clevo_keyboard.ko clevo_wmi.ko clevo_acpi.ko
-#                       clevofan.ko from DIR (all four must exist there).
+#                       from DIR (all three must exist there). clevofan is
+#                       a separate package (clevofan-dkms); if it is
+#                       currently loaded it is removed/reloaded via
+#                       modprobe regardless of this flag.
 #                       Default: plain modprobe (DKMS-installed modules).
 #   START END           charge thresholds written to sysfs before the
-#                       reload (defaults: 95 100).
+#                       reload (default: restore the values read before
+#                       unload, i.e. a no-op).
 #
-# Steps: stop fan daemons, write START/END, remove
-# clevofan/clevo_acpi/clevo_wmi/clevo_keyboard, verify no ^clevo module
-# remains (exit 3 otherwise), load clevo_keyboard first then clevo_wmi,
-# clevo_acpi, clevofan, settle, print the resulting thresholds,
+# Steps: stop fan daemons, write START/END, remove (if loaded) clevofan then
+# clevo_acpi/clevo_wmi/clevo_keyboard, verify no ^clevo module remains
+# (exit 3 otherwise), load clevo_keyboard first then clevo_wmi, clevo_acpi,
+# then clevofan if it was loaded, settle, print the resulting thresholds,
 # charge_type and loaded-module srcversions as key=value lines, then
 # restart the daemons. Daemons are also restarted on failure (trap).
 #
@@ -25,8 +29,9 @@ set -euo pipefail
 export LANG=C
 
 MODULES_DIR=""
-START=95
-END=100
+START=""
+END=""
+THRESHOLDS_GIVEN=0
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -43,6 +48,7 @@ while [ $# -gt 0 ]; do
 		if [ $# -eq 2 ]; then
 			START=$1
 			END=$2
+			THRESHOLDS_GIVEN=1
 			shift 2
 		else
 			echo "usage: $0 [--modules-dir DIR] [START END]" >&2
@@ -52,26 +58,42 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-case "$START$END" in
-*[!0-9]* | "")
-	echo "START/END must be integers (got '$START' '$END')" >&2
-	exit 2
-	;;
-esac
+if [ "$THRESHOLDS_GIVEN" = 1 ]; then
+	case "$START" in
+	'' | *[!0-9]*)
+		echo "START must be an integer 1..100 (got '$START')" >&2
+		exit 2
+		;;
+	esac
+	case "$END" in
+	'' | *[!0-9]*)
+		echo "END must be an integer 1..100 (got '$END')" >&2
+		exit 2
+		;;
+	esac
+	if [ "$START" -lt 1 ] || [ "$START" -gt 100 ] || [ "$END" -lt 1 ] || [ "$END" -gt 100 ]; then
+		echo "START/END must be 1..100 (got '$START' '$END')" >&2
+		exit 2
+	fi
+	if [ "$START" -ge "$END" ]; then
+		echo "START must be less than END (got '$START' '$END')" >&2
+		exit 2
+	fi
+fi
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "must run as root (sudo -A bash juno/RELOAD.sh ...)" >&2
 	exit 2
 fi
 
-exec 9>/tmp/juno-reload.lock
+exec 9>/run/lock/juno-reload.lock
 flock -n 9 || {
-	echo "another RELOAD.sh instance holds /tmp/juno-reload.lock" >&2
+	echo "another RELOAD.sh instance holds /run/lock/juno-reload.lock" >&2
 	exit 7
 }
 
-REMOVE_ORDER="clevofan clevo_acpi clevo_wmi clevo_keyboard"
-LOAD_ORDER="clevo_keyboard clevo_wmi clevo_acpi clevofan"
+REMOVE_ORDER="clevo_acpi clevo_wmi clevo_keyboard"
+LOAD_ORDER="clevo_keyboard clevo_wmi clevo_acpi"
 
 if [ -n "$MODULES_DIR" ]; then
 	for m in $LOAD_ORDER; do
@@ -80,6 +102,13 @@ if [ -n "$MODULES_DIR" ]; then
 			exit 2
 		}
 	done
+fi
+
+# clevofan is a separate DKMS package, never built in this tree; it is
+# only touched if it is currently loaded, and always via modprobe.
+CLEVOFAN_LOADED=0
+if lsmod | grep '^clevofan' >/dev/null; then
+	CLEVOFAN_LOADED=1
 fi
 
 BAT=""
@@ -159,10 +188,22 @@ stop_daemons
 pre_write_start=$(cat "$BAT/charge_control_start_threshold")
 pre_write_end=$(cat "$BAT/charge_control_end_threshold")
 
+if [ "$THRESHOLDS_GIVEN" = 0 ]; then
+	START=$pre_write_start
+	END=$pre_write_end
+fi
+
 echo "$START" >"$BAT/charge_control_start_threshold" || exit 5
 echo "$END" >"$BAT/charge_control_end_threshold" || exit 5
 after_write_start=$(cat "$BAT/charge_control_start_threshold")
 after_write_end=$(cat "$BAT/charge_control_end_threshold")
+
+if [ "$CLEVOFAN_LOADED" = 1 ]; then
+	modprobe -r clevofan || {
+		echo "failed to remove clevofan" >&2
+		exit 4
+	}
+fi
 
 for m in $REMOVE_ORDER; do
 	modprobe -r "$m" || {
@@ -191,7 +232,17 @@ for m in $LOAD_ORDER; do
 	fi
 done
 
-udevadm settle -t 15 || true
+if [ "$CLEVOFAN_LOADED" = 1 ]; then
+	modprobe clevofan || {
+		echo "failed to modprobe clevofan" >&2
+		exit 4
+	}
+fi
+
+# a settle timeout is not fatal here: the retry loop below independently
+# checks that charge_control_start_threshold reappeared, which is what
+# actually gates continuation.
+udevadm settle -t 15 || echo "warning: udevadm settle timed out" >&2
 
 # the battery hook re-adds the sysfs attrs; wait briefly if needed
 for _ in 1 2 3 4 5 6 7 8 9 10; do
