@@ -1,16 +1,17 @@
-# Provenance: branch `rebase-4.22.3` vs upstream tuxedo-drivers v4.22.3
+# Provenance: branch `rebase-4.22.3` vs upstream tuxedo-drivers v4.24.0
 
 Documents every difference between the `rebase-4.22.3` branch tree and the
-upstream tuxedo-drivers tree it derives from. The branch replaces the
-previously vendored 4.6.2 payload (covered by the pre-rebase audit at the
-bottom) with the v4.22.3 payload, carrying the fork's renames, gate-disable,
-payload layout and FlexiCharger patches unchanged in semantics.
+upstream tuxedo-drivers tree it derives from. The branch base is now upstream
+v4.24.0 (clevo_acpi.c is a platform_driver since v4.24.0), carrying the fork's
+renames, gate-disable, payload layout and FlexiCharger patches unchanged in
+semantics. The previously vendored 4.6.2 payload is covered by the pre-rebase
+audit at the bottom.
 
 ## BASE-REF
 
-`0b2f8c6ab7ef709343ae74b3de51dcae45357641` — commit tagged `v4.22.3`
-(annotated tag object b5939a2db033e361d1a70a3fbe67c33a99a9ee01), upstream
-https://github.com/tuxedocomputers/tuxedo-drivers.git, dated 2026-06-25.
+`e0e0b8a21252b796aa312b53d00dc0e8a3fd738b` — commit tagged `v4.24.0`
+(annotated tag object 03537625ab4357adcd96e4b59559a45c5d1c1402), upstream
+https://github.com/tuxedocomputers/tuxedo-drivers.git, dated 2026-09-23.
 
 ## Differences from BASE-REF
 
@@ -22,7 +23,8 @@ https://github.com/tuxedocomputers/tuxedo-drivers.git, dated 2026-06-25.
   (both member files renamed).
 - String renames inside sources: `DRIVER_NAME "tuxedo_keyboard"` ->
   `"clevo_keyboard"` (clevo_keyboard_common.h); pr_fmt `"tuxedo_keyboard"` ->
-  `"clevo_keyboard"` (clevo_keyboard.c, clevo_wmi.c, clevo_acpi.c);
+  `"clevo_keyboard"` (clevo_keyboard.c, clevo_wmi.c; clevo_acpi.c uses
+  `KBUILD_MODNAME` since the v4.24.0 platform_driver refactor);
   input-device name `"TUXEDO Keyboard"` -> `"CLEVO Keyboard"`
   (clevo_keyboard.c); `.name = "TUXEDO Flexicharger Extension"` ->
   `"CLEVO ..."` (clevo_keyboard.h); `#include` paths adjusted accordingly.
@@ -37,17 +39,18 @@ src/Kbuild.
 
 ### 3. Payload layout (carried): no Kbuild wiring
 
-Neither the upstream top-level `Kbuild` nor `src/Kbuild` is vendored, and the
-renamed `src/clevo_compatibility_check/` ships no Kbuild. Upstream sources
-new in v4.22.3 are vendored for tree completeness but not built:
-`src/gxtp7380/`, `src/stk8321/`, `src/tuxedo_tuxi/`.
+Neither the upstream top-level `Kbuild`, `src/Kbuild` nor
+`tuxedo_compatibility_check/Kbuild` is vendored, and the renamed
+`src/clevo_compatibility_check/` ships no Kbuild. Upstream drivers not built
+by the fork are vendored for tree completeness: `src/gxtp7380/`,
+`src/stk8321/`, `src/tuxedo_tuxi/` and the uniwill/ite/tuxedo_nb04/nb05
+units.
 
 ### 4. Gate-disable + compat-check vendor strings (carried, juno-only)
 
 - src/clevo_keyboard.c: the DMI compatibility gate is commented out
-  (`// if (!tuxedo_is_compatible()) return -ENODEV;`, v4.22.3 site
-  clevo_keyboard.c:202-203). The driver probes on any vendor, not just
-  TUXEDO.
+  (`// if (!tuxedo_is_compatible()) return -ENODEV;`, v4.24.0 site
+  clevo_keyboard.c:202). The driver probes on any vendor, not just TUXEDO.
 - src/clevo_compatibility_check/clevo_compatibility_check.c: three
   `DMI_MATCH` vendor strings "TUXEDO" -> "Notebook" (DMI_SYS_VENDOR,
   DMI_BOARD_VENDOR, DMI_CHASSIS_VENDOR). Dead code: the module is not built.
@@ -74,10 +77,10 @@ time). Content unchanged from the pre-rebase tree.
 - `158ad9c` — `power_supply_changed()` after charge_type and threshold
   writes.
 - Show-path EC re-read is NOT a fork delta: upstream show handlers call
-  `clevo_flexicharger_read()` in both bases (v4.22.3
-  src/clevo_keyboard.h:740, :782, :823); nothing carried.
+  `clevo_flexicharger_read()` in both bases (v4.24.0 src/clevo_keyboard.h:835,
+  :879, :919); nothing carried.
 - The kernel-6.11 platform-remove guard (pre-rebase audit item 5) is
-  upstream-native since v4.6.3 and present in v4.22.3; no longer a delta.
+  upstream-native since v4.6.3 and present in v4.24.0; no longer a delta.
 
 Verified: the branch's src/clevo_keyboard.h FlexiCharger region is
 byte-identical to the shipped 4.6.2+diamon3 source
@@ -89,8 +92,8 @@ ephemeral live run 2026-09-16 PASS (hook registered, 85/75 round-trip).
 
 `juno/` (harness + docs), `README.md`, `dkms.conf`. The 4.6.2-era
 `debian/`, `tuxedo-drivers.spec.in`, `tuxedo_keyboard.conf` and
-`99-z-tuxedo-systemd-fix.rules` were removed after the rebase; `dkms.conf`
-is the only packaging. Not vendored (outside the payload layout):
+`99-z-tuxedo-systemd-fix.rules` were removed after the v4.22.3 rebase;
+dkms.conf is the only packaging. Not vendored (outside the payload layout):
 upstream's `files/`, `pkg-tests/`, `package.yml`, `.editorconfig`,
 `.gitlab-ci.yml`.
 
@@ -99,7 +102,7 @@ upstream's `files/`, `pkg-tests/`, `package.yml`, `.editorconfig`,
 ```sh
 git clone https://github.com/tuxedocomputers/tuxedo-drivers.git
 cd tuxedo-drivers
-base=$(cat juno/BASE-REF)          # 0b2f8c6ab7ef709343ae74b3de51dcae45357641 (tag v4.22.3)
+base=$(cat juno/BASE-REF)          # e0e0b8a21252b796aa312b53d00dc0e8a3fd738b (tag v4.24.0)
 mkdir /tmp/tux-base && git archive "$base" | tar -x -C /tmp/tux-base
 
 diff /tmp/tux-base/Makefile Makefile                                  # item 2
