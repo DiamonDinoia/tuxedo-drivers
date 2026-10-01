@@ -55,10 +55,21 @@ units.
   `DMI_MATCH` vendor strings "TUXEDO" -> "Notebook" (DMI_SYS_VENDOR,
   DMI_BOARD_VENDOR, DMI_CHASSIS_VENDOR). Dead code: the module is not built.
 
-### 5. dkms.conf is a juno-only file (unchanged)
+### 5. dkms.conf is fork-side packaging (retained, PACKAGE_VERSION 4.24.0+diamon1)
 
 No upstream counterpart (upstream generates `src/dkms.conf` at install
-time). Content unchanged from the pre-rebase tree.
+time). The fork keeps it as its only packaging: `PACKAGE_NAME=clevo-keyboard`,
+`PACKAGE_VERSION=4.24.0+diamon1`, three modules (clevo_keyboard, clevo_wmi,
+clevo_acpi).
+
+### 5a. clevo_acpi probe ordering (carried, fork patch on upstream v4.24.0 code)
+
+`clevo_platform_probe()` in src/clevo_acpi.c now calls `devm_kzalloc()`
+before `acpi_dev_install_notify_handler()`. Upstream v4.24.0 installs the
+handler first. If the allocation then failed, probe returned -ENOMEM with the
+handler still installed. The driver core does not call `remove()` after a failed
+probe, so a later ACPI notify could call into an unloaded module. The
+handler install is now the last failing step, so no early return leaks it.
 
 ### 6. Carried FlexiCharger patches (the fork's functional delta)
 
