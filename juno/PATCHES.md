@@ -60,7 +60,11 @@ units.
 No upstream counterpart (upstream generates `src/dkms.conf` at install
 time). The fork keeps it as its only packaging: `PACKAGE_NAME=clevo-keyboard`,
 `PACKAGE_VERSION=4.24.0+diamon1`, three modules (clevo_keyboard, clevo_wmi,
-clevo_acpi).
+clevo_acpi). DKMS must skip kernels older than 6.6: v4.24.0's clevo_acpi.c uses
+`acpi_dev_install_notify_handler()` and `acpi_dev_remove_notify_handler()`,
+which first appeared in mainline v6.6, so dkms.conf sets
+`BUILD_EXCLUSIVE_KERNEL_MIN="6.6"`. Per-API table: kmin.md on the integration
+branch workspace.
 
 ### 5a. clevo_acpi probe ordering (carried, fork patch on upstream v4.24.0 code)
 
