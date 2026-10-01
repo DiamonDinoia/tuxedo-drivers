@@ -63,17 +63,18 @@ time). The fork keeps it as its only packaging: `PACKAGE_NAME=clevo-keyboard`,
 clevo_acpi). DKMS must skip kernels older than 6.6: v4.24.0's clevo_acpi.c uses
 `acpi_dev_install_notify_handler()` and `acpi_dev_remove_notify_handler()`,
 which first appeared in mainline v6.6, so dkms.conf sets
-`BUILD_EXCLUSIVE_KERNEL_MIN="6.6"`. Per-API table: kmin.md on the integration
-branch workspace.
+`BUILD_EXCLUSIVE_KERNEL_MIN="6.6"`.
 
 ### 5a. clevo_acpi probe ordering (carried, fork patch on upstream v4.24.0 code)
 
-`clevo_platform_probe()` in src/clevo_acpi.c now calls `devm_kzalloc()`
-before `acpi_dev_install_notify_handler()`. Upstream v4.24.0 installs the
-handler first. If the allocation then failed, probe returned -ENOMEM with the
-handler still installed. The driver core does not call `remove()` after a failed
-probe, so a later ACPI notify could call into an unloaded module. The
-handler install is now the last failing step, so no early return leaks it.
+`clevo_platform_probe()` in src/clevo_acpi.c now runs `devm_kzalloc()` first,
+fills `driver_data`, sets `active_driver_data`, and calls
+`clevo_keyboard_add_interface(&clevo_acpi_interface)` before it installs the
+ACPI notify handler. Upstream v4.24.0 installs the handler first. If the
+install fails, probe rolls both back (`clevo_keyboard_remove_interface()`,
+`active_driver_data = NULL`) and returns the error. This stops two leaks the
+driver core would leave after a failed probe (remove() runs only after a
+successful one): the installed handler and the registered interface.
 
 ### 6. Carried FlexiCharger patches (the fork's functional delta)
 
