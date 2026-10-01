@@ -203,14 +203,11 @@ static int clevo_platform_probe(struct platform_device *pdev)
 	if (!acpi)
 		return -ENODEV;
 
-	/* juno: allocate first, so installing the notify handler is the last failing step */
+	/* juno: allocate first, then register the interface, then enable
+	 * notifications; roll both back if the install fails. */
 	driver_data = devm_kzalloc(&pdev->dev, sizeof(*driver_data), GFP_KERNEL);
 	if (!driver_data)
 		return -ENOMEM;
-
-	error = acpi_dev_install_notify_handler(acpi, ACPI_ALL_NOTIFY, clevo_acpi_notify, acpi);
-	if (error)
-		return error;
 
 	driver_data->adev = acpi;
 	driver_data->clevo_interface = &clevo_acpi_interface;
@@ -221,6 +218,13 @@ static int clevo_platform_probe(struct platform_device *pdev)
 
 	// Add this interface
 	clevo_keyboard_add_interface(&clevo_acpi_interface);
+
+	error = acpi_dev_install_notify_handler(acpi, ACPI_ALL_NOTIFY, clevo_acpi_notify, acpi);
+	if (error) {
+		clevo_keyboard_remove_interface(&clevo_acpi_interface);
+		active_driver_data = NULL;
+		return error;
+	}
 
 	pr_info("interface initialized\n");
 
