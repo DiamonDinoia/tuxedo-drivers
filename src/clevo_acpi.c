@@ -203,13 +203,14 @@ static int clevo_platform_probe(struct platform_device *pdev)
 	if (!acpi)
 		return -ENODEV;
 
-	error = acpi_dev_install_notify_handler(acpi, ACPI_ALL_NOTIFY, clevo_acpi_notify, acpi);
-	if (error)
-		return error;
-
+	/* juno: allocate first, so installing the notify handler is the last failing step */
 	driver_data = devm_kzalloc(&pdev->dev, sizeof(*driver_data), GFP_KERNEL);
 	if (!driver_data)
 		return -ENOMEM;
+
+	error = acpi_dev_install_notify_handler(acpi, ACPI_ALL_NOTIFY, clevo_acpi_notify, acpi);
+	if (error)
+		return error;
 
 	driver_data->adev = acpi;
 	driver_data->clevo_interface = &clevo_acpi_interface;
