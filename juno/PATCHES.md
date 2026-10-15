@@ -1,17 +1,17 @@
-# Provenance: branch `rebase-4.22.3` vs upstream tuxedo-drivers v4.24.0
+# Provenance: branch `rebase-4.22.3` vs upstream tuxedo-drivers v4.25.0
 
 Documents every difference between the `rebase-4.22.3` branch tree and the
 upstream tuxedo-drivers tree it derives from. The branch base is now upstream
-v4.24.0 (clevo_acpi.c is a platform_driver since v4.24.0), carrying the fork's
+v4.25.0 (clevo_acpi.c is a platform_driver since v4.24.0), carrying the fork's
 renames, gate-disable, payload layout and FlexiCharger patches unchanged in
 semantics. The previously vendored 4.6.2 payload is covered by the pre-rebase
 audit at the bottom.
 
 ## BASE-REF
 
-`e0e0b8a21252b796aa312b53d00dc0e8a3fd738b` — commit tagged `v4.24.0`
-(annotated tag object 03537625ab4357adcd96e4b59559a45c5d1c1402), upstream
-https://github.com/tuxedocomputers/tuxedo-drivers.git, dated 2026-09-23.
+`a929f9ce143316b3b18d5f3fbf9cc54f0c1122e2` — commit tagged `v4.25.0`
+(annotated tag object 2b52422de0d9e3126b77625e556e41e4d7890fb8), upstream
+https://github.com/tuxedocomputers/tuxedo-drivers.git, dated 2026-10-06.
 
 ## Differences from BASE-REF
 
@@ -55,22 +55,22 @@ units.
   `DMI_MATCH` vendor strings "TUXEDO" -> "Notebook" (DMI_SYS_VENDOR,
   DMI_BOARD_VENDOR, DMI_CHASSIS_VENDOR). Dead code: the module is not built.
 
-### 5. dkms.conf is fork-side packaging (retained, PACKAGE_VERSION 4.24.0+diamon1)
+### 5. dkms.conf is fork-side packaging (retained, PACKAGE_VERSION 4.25.0+diamon1)
 
 No upstream counterpart (upstream generates `src/dkms.conf` at install
 time). The fork keeps it as its only packaging: `PACKAGE_NAME=clevo-keyboard`,
-`PACKAGE_VERSION=4.24.0+diamon1`, three modules (clevo_keyboard, clevo_wmi,
-clevo_acpi). DKMS must skip kernels older than 6.6: v4.24.0's clevo_acpi.c uses
+`PACKAGE_VERSION=4.25.0+diamon1`, three modules (clevo_keyboard, clevo_wmi,
+clevo_acpi). DKMS must skip kernels older than 6.6: v4.25.0's clevo_acpi.c uses
 `acpi_dev_install_notify_handler()` and `acpi_dev_remove_notify_handler()`,
 which first appeared in mainline v6.6, so dkms.conf sets
 `BUILD_EXCLUSIVE_KERNEL_MIN="6.6"`.
 
-### 5a. clevo_acpi probe ordering (carried, fork patch on upstream v4.24.0 code)
+### 5a. clevo_acpi probe ordering (carried, fork patch on upstream v4.25.0 code)
 
 `clevo_platform_probe()` in src/clevo_acpi.c now runs `devm_kzalloc()` first,
 fills `driver_data`, sets `active_driver_data`, and calls
 `clevo_keyboard_add_interface(&clevo_acpi_interface)` before it installs the
-ACPI notify handler. Upstream v4.24.0 installs the handler first. If the
+ACPI notify handler. Upstream v4.25.0 installs the handler first. If the
 install fails, probe rolls both back (`clevo_keyboard_remove_interface()`,
 `active_driver_data = NULL`) and returns the error. This stops two leaks the
 driver core would leave after a failed probe (remove() runs only after a
@@ -118,7 +118,7 @@ upstream's `files/`, `pkg-tests/`, `package.yml`, `.editorconfig`,
 ```sh
 git clone https://github.com/tuxedocomputers/tuxedo-drivers.git
 cd tuxedo-drivers
-base=$(cat juno/BASE-REF)          # e0e0b8a21252b796aa312b53d00dc0e8a3fd738b (tag v4.24.0)
+base=$(cat juno/BASE-REF)          # a929f9ce143316b3b18d5f3fbf9cc54f0c1122e2 (tag v4.25.0)
 mkdir /tmp/tux-base && git archive "$base" | tar -x -C /tmp/tux-base
 
 diff /tmp/tux-base/Makefile Makefile                                  # item 2
